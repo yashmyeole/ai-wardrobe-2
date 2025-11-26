@@ -99,37 +99,41 @@ export async function getImageEmbedding(
   }
 }
 
+// List of candidate CLIP text encoders / pipelines to try (ordered)
+const CLIP_TEXT_CANDIDATES = [
+  {
+    task: "text-feature-extraction",
+    model: "Xenova/clip-text-vit-base-patch32",
+  },
+  { task: "feature-extraction", model: "Xenova/clip-text-vit-base-patch32" },
+  { task: "feature-extraction", model: "Xenova/clip-text-small" },
+  { task: "feature-extraction", model: "Xenova/clip-text-vit-large-patch14" },
+  // sentence-transformers fallback (different space/dim)
+  {
+    task: "feature-extraction",
+    model: "sentence-transformers/all-MiniLM-L6-v2",
+  },
+];
+
+// Desired embedding dimension for CLIP base = 512
+const TARGET_DIM = 512;
+
 export async function getTextEmbedding(text: string): Promise<number[]> {
-  try {
-    if (!textEmbeddingModel) {
-      // Using CLIP's text encoder (same model for multimodal alignment)
-      textEmbeddingModel = await pipeline(
-        "feature-extraction",
-        "Xenova/clip-vit-base-patch32"
-      );
-    }
+  // Just delegate to OpenAI helper
+  const emb = await getTextEmbeddingOpenAI(text);
 
-    const output = await textEmbeddingModel(text, {
-      pooling: "mean",
-      normalize: true,
-    });
+  // OpenAI returns 1536-d; we need 512-d for our DB column (vector(512))
+  const numeric = emb.map((v: any) => Number(v) || 0);
 
-    // Handle different output formats
-    const embedding = output.data || output || [];
-    const embeddingArray = Array.isArray(embedding)
-      ? embedding
-      : Array.from(embedding);
-
-    // Ensure we have the right dimension (512 for CLIP base)
-    return embeddingArray.slice(0, 512);
-  } catch (error) {
-    console.error("Error generating text embedding:", error);
-    // Return a zero vector as fallback
-    return new Array(512).fill(0);
+  if (numeric.length < TARGET_DIM) {
+    return numeric.concat(new Array(TARGET_DIM - numeric.length).fill(0));
   }
+
+  console.log(numeric[500], numeric[501], numeric[502]);
+  return numeric.slice(0, TARGET_DIM);
 }
 
-// Alternative: Use OpenAI embeddings if API key is available
+// Use OpenAI embeddings if API key is available
 export async function getTextEmbeddingOpenAI(text: string): Promise<number[]> {
   const { OpenAI } = await import("openai");
 
@@ -146,7 +150,10 @@ export async function getTextEmbeddingOpenAI(text: string): Promise<number[]> {
     input: text,
   });
 
-  // OpenAI returns 1536 dimensions, we need to map to 512 for CLIP compatibility
-  // For now, we'll use CLIP text encoder to maintain same embedding space
-  return getTextEmbedding(text);
+  const vec = response.data?.[0]?.embedding;
+  if (!vec) {
+    throw new Error("OpenAI returned no embedding");
+  }
+
+  return vec.map((v: any) => Number(v) || 0);
 }
