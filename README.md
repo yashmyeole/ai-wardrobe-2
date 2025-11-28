@@ -14,21 +14,21 @@ AI Wardrobe is a smart outfit recommendation system that uses AI to help you cho
 
 - **Frontend**: Next.js 16, React, Tailwind CSS
 - **Backend**: Next.js API Routes
-- **Database**: PostgreSQL (Prisma ORM)
-- **Vector Database**: Milvus
+- **Database**: PostgreSQL (Supabase), Firebase (Images)
+- **Vector Database**: PG Vector
 - **Embeddings**: CLIP (via @xenova/transformers)
 - **Authentication**: NextAuth.js
-- **Deployment**: Docker & Docker Compose
 
 ## Architecture
 
 ### Data Flow
 
 1. **Image Upload**:
-   - User uploads clothing image → Backend stores image → CLIP generates embedding → Stored in Milvus + metadata in PostgreSQL
+
+   - User uploads clothing image → Backend stores image → CLIP generates embedding → Stored in PG vector + metadata in PostgreSQL
 
 2. **Recommendation**:
-   - User enters natural language query → Text embedding generated → Vector similarity search in Milvus → Results filtered by metadata → Recommendations returned
+   - User enters natural language query → Text embedding generated → Vector similarity search in PG vector → Results filtered by metadata → Recommendations returned
 
 ### Database Schema
 
@@ -55,27 +55,32 @@ AI Wardrobe is a smart outfit recommendation system that uses AI to help you cho
 ### Option 1: Docker Compose (Recommended)
 
 1. **Clone the repository**:
+
    ```bash
    git clone <repository-url>
    cd ai-wardrobe-2
    ```
 
 2. **Create environment file**:
+
    ```bash
    cp .env.example .env
    ```
-   
+
    Edit `.env` and update:
+
    - `NEXTAUTH_SECRET`: Generate a random secret (e.g., `openssl rand -base64 32`)
    - `POSTGRES_PASSWORD`: Set a secure password
    - Other environment variables as needed
 
 3. **Start services**:
+
    ```bash
    docker-compose up -d
    ```
 
 4. **Run database migrations**:
+
    ```bash
    docker-compose exec app npx prisma migrate dev
    ```
@@ -88,26 +93,31 @@ AI Wardrobe is a smart outfit recommendation system that uses AI to help you cho
 ### Option 2: Local Development
 
 1. **Install dependencies**:
+
    ```bash
    npm install
    ```
 
 2. **Set up PostgreSQL**:
+
    - Install and start PostgreSQL
    - Create a database: `createdb ai_wardrobe`
 
 3. **Set up Milvus**:
+
    - Install Milvus (see [Milvus Installation Guide](https://milvus.io/docs/install_standalone-docker.md))
    - Or use Docker: `docker run -d -p 19530:19530 milvusdb/milvus:latest`
 
 4. **Configure environment**:
+
    ```bash
    cp .env.example .env
    ```
-   
+
    Update `.env` with your database and Milvus connection details.
 
 5. **Run database migrations**:
+
    ```bash
    npx prisma migrate dev
    ```
@@ -116,6 +126,7 @@ AI Wardrobe is a smart outfit recommendation system that uses AI to help you cho
    The collection will be automatically created on first use, or you can create it manually using the Milvus client.
 
 7. **Start development server**:
+
    ```bash
    npm run dev
    ```
@@ -160,10 +171,12 @@ AI Wardrobe is a smart outfit recommendation system that uses AI to help you cho
 ## API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/[...nextauth]` - NextAuth endpoints
 
 ### Wardrobe
+
 - `POST /api/wardrobe/upload` - Upload wardrobe item
 - `GET /api/wardrobe/items` - Get wardrobe items (with filters)
 - `POST /api/wardrobe/recommend` - Get outfit recommendations

@@ -3,12 +3,12 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebaseAdmin";
-import { getImageEmbedding } from "@/lib/embeddings";
-import { query } from "@/lib/db"; // ensure tableHasColumn exported or implement similar
+import { getImageDescription, getDescriptionEmbedding } from "@/lib/embeddings";
+import { query } from "@/lib/db";
 import { z } from "zod";
 
 const uploadSchema = z.object({
-  userId: z.string().optional(), // optional client-supplied user id (UNTRUSTED)
+  userId: z.string().optional(),
   category: z.enum([
     "shirt",
     "pants",
@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     if ((file.size ?? 0) > MAX_BYTES) {
       return NextResponse.json({ error: "File too large" }, { status: 400 });
     }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -66,20 +67,63 @@ export async function POST(req: NextRequest) {
       bucket.name
     }/${encodeURIComponent(filename)}`;
 
-    // Insert row: detect if table has user_id column
+    // Generate image description using OpenAI Vision
+    let description = "";
+    try {
+      description = await getImageDescription(buffer, file.type);
+    } catch (err: any) {
+      console.error("Failed to generate image description:", err);
+      try {
+        await fileRef.delete();
+      } catch (e) {}
+      return NextResponse.json(
+        { error: "Failed to analyze image" },
+        { status: 500 }
+      );
+    }
+
+    // Generate embedding from description
+    let descriptionEmbedding: number[] = [];
+    try {
+      descriptionEmbedding = await getDescriptionEmbedding(description);
+    } catch (err: any) {
+      console.error("Failed to generate description embedding:", err);
+      try {
+        await fileRef.delete();
+      } catch (e) {}
+      return NextResponse.json(
+        { error: "Failed to process description" },
+        { status: 500 }
+      );
+    }
+
+    // Validate embedding
+    if (!Array.isArray(descriptionEmbedding) || descriptionEmbedding.length === 0) {
+      try {
+        await fileRef.delete();
+      } catch (e) {}
+      return NextResponse.json(
+        { error: "Embedding generation failed" },
+        { status: 500 }
+      );
+    }
+
+    // Insert row into database with description and its embedding
     let insertSql: string;
     let insertParams: any[];
 
     if (validated.userId) {
       insertSql = `
         INSERT INTO public.wardrobe_items
-          (user_id, image_url, category, style, season, colors, tags, status, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'processing', now(), now())
-        RETURNING id;
+          (user_id, image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at)
+        VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8::jsonb, $9::jsonb, 'ready', now(), now())
+        RETURNING id, user_id, image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at;
       `;
       insertParams = [
         validated.userId,
         imageUrl,
+        description,
+        `[${descriptionEmbedding.join(",")}]`,
         validated.category,
         validated.style,
         validated.season,
@@ -89,12 +133,14 @@ export async function POST(req: NextRequest) {
     } else {
       insertSql = `
         INSERT INTO public.wardrobe_items
-          (image_url, category, style, season, colors, tags, status, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, 'processing', now(), now())
-        RETURNING id;
+          (image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at)
+        VALUES ($1, $2, $3::vector, $4, $5, $6, $7::jsonb, $8::jsonb, 'ready', now(), now())
+        RETURNING id, image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at;
       `;
       insertParams = [
         imageUrl,
+        description,
+        `[${descriptionEmbedding.join(",")}]`,
         validated.category,
         validated.style,
         validated.season,
@@ -103,13 +149,12 @@ export async function POST(req: NextRequest) {
       ];
     }
 
-    // sanity check placeholder counts
+    // Sanity check placeholder counts
     const placeholders = (insertSql.match(/\$\d+/g) || []).map((s) =>
       Number(s.slice(1))
     );
     const expected = placeholders.length ? Math.max(...placeholders) : 0;
     if (insertParams.length < expected) {
-      // cleanup file
       try {
         await fileRef.delete();
       } catch (e) {}
@@ -127,52 +172,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "DB insert failed" }, { status: 500 });
     }
 
-    const itemId = insertRes.rows[0].id;
-
-    // Generate embedding
-    // const embedding = await getImageEmbedding(buffer); // returns number[]
-    // pass MIME so data URI is correct
-    const embedding = await getImageEmbedding(buffer, file.type);
-
-    // Fallback / validation
-    if (!Array.isArray(embedding) || embedding.length === 0) {
-      await query(
-        "UPDATE public.wardrobe_items SET status = $1, updated_at = now() WHERE id = $2",
-        ["failed", itemId]
-      );
-      return NextResponse.json(
-        { error: "Embedding generation failed" },
-        { status: 500 }
-      );
-    }
-
-    // Convert to pgvector text format: "[0.1,0.2,...]"
-    const numericEmbedding = embedding.map((v) => Number(v) || 0);
-    const embeddingLiteral = `[${numericEmbedding.join(",")}]`;
-
-    const updateSql = `
-  UPDATE public.wardrobe_items
-  SET embedding = $1::vector,
-      status = 'ready',
-      updated_at = now()
-  WHERE id = $2
-  RETURNING *;
-`;
-    const updateRes = await query(updateSql, [embeddingLiteral, itemId]);
-
-    if (!updateRes || updateRes.rowCount === 0) {
-      await query(
-        "UPDATE public.wardrobe_items SET status = $1, updated_at = now() WHERE id = $2",
-        ["failed", itemId]
-      );
-      return NextResponse.json(
-        { error: "Failed to save embedding" },
-        { status: 500 }
-      );
-    }
-
-    const finalItem = updateRes.rows[0];
-    return NextResponse.json({ item: finalItem }, { status: 201 });
+    const item = insertRes.rows[0];
+    return NextResponse.json({ item }, { status: 201 });
   } catch (err: any) {
     console.error("Upload error", err);
     return NextResponse.json(

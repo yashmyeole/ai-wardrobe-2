@@ -10,6 +10,26 @@ env.allowLocalModels = false;
 // @ts-ignore
 env.platform = "node";
 
+// OpenAI client
+let openaiClient: any = null;
+
+function getOpenAIClient() {
+  if (!openaiClient) {
+    const { OpenAI } = require("openai");
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openaiClient;
+}
+
+// Helper: convert Buffer to base64 data URI
+function bufferToBase64DataURI(buffer: Buffer, mimeType: string): string {
+  const b64 = buffer.toString("base64");
+  const mime = mimeType || "image/jpeg";
+  return `data:${mime};base64,${b64}`;
+}
+
 // CLIP model for image embeddings
 let imageEmbeddingModel: any = null;
 let textEmbeddingModel: any = null;
@@ -156,4 +176,93 @@ export async function getTextEmbeddingOpenAI(text: string): Promise<number[]> {
   }
 
   return vec.map((v: any) => Number(v) || 0);
+}
+
+/**
+ * Generate embedding from image description text using OpenAI.
+ * Converts OpenAI's 1536-d embedding to 512-d for consistency with image embeddings.
+ *
+ * @param description Text description of the clothing item
+ * @returns 512-dimensional embedding array
+ */
+export async function getDescriptionEmbedding(
+  description: string
+): Promise<number[]> {
+  if (!description || description.trim().length === 0) {
+    throw new Error("Description cannot be empty");
+  }
+
+  const embedding = await getTextEmbeddingOpenAI(description);
+  
+  // Convert from OpenAI's 1536-d to our target 512-d
+  const numeric = embedding.map((v: any) => Number(v) || 0);
+
+  if (numeric.length < TARGET_DIM) {
+    return numeric.concat(new Array(TARGET_DIM - numeric.length).fill(0));
+  }
+
+  return numeric.slice(0, TARGET_DIM);
+}
+
+/**
+ * Generate image description using OpenAI Vision API.
+ *
+ * @param imageBuffer Image buffer
+ * @param mimeType MIME type of the image (e.g., 'image/jpeg')
+ * @returns Description text from the model
+ */
+export async function getImageDescription(
+  imageBuffer: Buffer | ArrayBuffer | Uint8Array,
+  mimeType: string
+): Promise<string> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY not configured");
+  }
+
+  // Normalize input to Buffer
+  let buffer: Buffer;
+  if (imageBuffer instanceof Buffer) buffer = imageBuffer;
+  else if (imageBuffer instanceof Uint8Array) buffer = Buffer.from(imageBuffer);
+  else if (imageBuffer instanceof ArrayBuffer)
+    buffer = Buffer.from(imageBuffer);
+  else buffer = Buffer.from(imageBuffer as any);
+
+  // Convert to base64 data URI
+  const dataUri = bufferToBase64DataURI(buffer, mimeType);
+
+  const openai = getOpenAIClient();
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Using gpt-4o-mini for better compatibility and cost-efficiency
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Describe this clothing item in detail. Include: type of garment, color, style, material (if visible), fit, occasion suitability, and any notable features or patterns.",
+            },
+            {
+              type: "image_url",
+              image_url: { url: dataUri },
+            },
+          ] as any,
+        },
+      ],
+      max_tokens: 300,
+    });
+
+    const description = response.choices?.[0]?.message?.content;
+    if (!description) {
+      throw new Error("No description returned from OpenAI");
+    }
+
+    return description.trim();
+  } catch (error: any) {
+    console.error("Error generating image description:", error);
+    throw new Error(
+      `Failed to generate image description: ${error.message || "Unknown error"}`
+    );
+  }
 }

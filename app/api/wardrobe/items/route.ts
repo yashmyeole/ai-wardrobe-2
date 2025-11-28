@@ -2,21 +2,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
-/**
- * Supported query params:
- * - category (single value)
- * - style (single value)
- * - season (single value)
- * - status (single value)
- * - userId (single value)
- * - colors (comma-separated list, e.g. colors=red,blue)
- * - tags (comma-separated list, e.g. tags=casual,favorite)
- * - q (free-text search, matches category/style/tags/colors)
- * - limit (number, default 100)
- * - offset (number, default 0)
- * - sort (created_at or updated_at), default created_at desc
- */
-
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
