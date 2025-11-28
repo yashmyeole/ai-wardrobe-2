@@ -98,7 +98,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate embedding
-    if (!Array.isArray(descriptionEmbedding) || descriptionEmbedding.length === 0) {
+    if (
+      !Array.isArray(descriptionEmbedding) ||
+      descriptionEmbedding.length === 0
+    ) {
       try {
         await fileRef.delete();
       } catch (e) {}

@@ -119,22 +119,6 @@ export async function getImageEmbedding(
   }
 }
 
-// List of candidate CLIP text encoders / pipelines to try (ordered)
-const CLIP_TEXT_CANDIDATES = [
-  {
-    task: "text-feature-extraction",
-    model: "Xenova/clip-text-vit-base-patch32",
-  },
-  { task: "feature-extraction", model: "Xenova/clip-text-vit-base-patch32" },
-  { task: "feature-extraction", model: "Xenova/clip-text-small" },
-  { task: "feature-extraction", model: "Xenova/clip-text-vit-large-patch14" },
-  // sentence-transformers fallback (different space/dim)
-  {
-    task: "feature-extraction",
-    model: "sentence-transformers/all-MiniLM-L6-v2",
-  },
-];
-
 // Desired embedding dimension for CLIP base = 512
 const TARGET_DIM = 512;
 
@@ -149,7 +133,6 @@ export async function getTextEmbedding(text: string): Promise<number[]> {
     return numeric.concat(new Array(TARGET_DIM - numeric.length).fill(0));
   }
 
-  console.log(numeric[500], numeric[501], numeric[502]);
   return numeric.slice(0, TARGET_DIM);
 }
 
@@ -193,7 +176,7 @@ export async function getDescriptionEmbedding(
   }
 
   const embedding = await getTextEmbeddingOpenAI(description);
-  
+
   // Convert from OpenAI's 1536-d to our target 512-d
   const numeric = embedding.map((v: any) => Number(v) || 0);
 
@@ -232,17 +215,21 @@ export async function getImageDescription(
 
   const openai = getOpenAIClient();
 
+  const PROMPT_SYSTEM = `You are a fashion-tagging assistant for an AI wardrobe system.
+    For every input image of a clothing item, analyze the item and output english sentences describing the item in detail for outfit matching along with the occasions it is wear by many people and can be worn by the person. Make sure you tell this in detail. When a user asks for this speific outfit the decscription should be able to give the accurate product to wear (not marketing language) 
+    `;
+
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini", // Using gpt-4o-mini for better compatibility and cost-efficiency
       messages: [
         {
+          role: "system",
+          content: PROMPT_SYSTEM,
+        },
+        {
           role: "user",
           content: [
-            {
-              type: "text",
-              text: "Describe this clothing item in detail. Include: type of garment, color, style, material (if visible), fit, occasion suitability, and any notable features or patterns.",
-            },
             {
               type: "image_url",
               image_url: { url: dataUri },
@@ -253,6 +240,8 @@ export async function getImageDescription(
       max_tokens: 300,
     });
 
+    console.log("OpenAI Vision response:", response.choices?.[0]?.message);
+
     const description = response.choices?.[0]?.message?.content;
     if (!description) {
       throw new Error("No description returned from OpenAI");
@@ -262,7 +251,9 @@ export async function getImageDescription(
   } catch (error: any) {
     console.error("Error generating image description:", error);
     throw new Error(
-      `Failed to generate image description: ${error.message || "Unknown error"}`
+      `Failed to generate image description: ${
+        error.message || "Unknown error"
+      }`
     );
   }
 }

@@ -36,14 +36,17 @@ export async function POST(req: NextRequest) {
         embedding = null;
       }
     } catch (err) {
-      console.warn("Query embedding failed, falling back to keyword search", err);
+      console.warn(
+        "Query embedding failed, falling back to keyword search",
+        err
+      );
       embedding = null;
     }
 
     // If we have an embedding, run similarity search on item descriptions
     if (embedding) {
       const embLiteral = vectorLiteralFromArray(embedding);
-      
+
       // Query: compute L2 distance via <-> operator between user query embedding and item description embeddings
       const sql = `
         SELECT
@@ -69,8 +72,11 @@ export async function POST(req: NextRequest) {
         const distance = Number(r.distance ?? 1e9);
         // Normalize distance to similarity score (0-1, higher is better)
         const score = Math.exp(-distance);
-        const explanation = `Matches your request "${userQuery}". Item description: "${r.description?.substring(0, 100)}..."`;
-        
+        const explanation = `Matches your request "${userQuery}". Item description: "${r.description?.substring(
+          0,
+          100
+        )}..."`;
+
         return {
           item: {
             id: String(r.id),
@@ -116,7 +122,7 @@ export async function POST(req: NextRequest) {
     const fallbackRes = await query(fallbackSql, [kw, limit]);
     const fallbackRows =
       fallbackRes && fallbackRes.rows ? fallbackRes.rows : [];
-    
+
     const fallbackRecs = fallbackRows.map((r: any, i: number) => ({
       item: {
         id: String(r.id),
