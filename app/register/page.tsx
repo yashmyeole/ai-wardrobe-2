@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { saveAuthContext } from "@/lib/auth-context";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -10,6 +11,7 @@ export default function RegisterPage() {
     email: "",
     password: "",
     name: "",
+    gender: "M",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,6 +33,13 @@ export default function RegisterPage() {
       if (!response.ok) {
         setError(data.error || "Registration failed");
       } else {
+        // Save auth context to localStorage
+        saveAuthContext({
+          userId: data.user.id,
+          email: data.user.email,
+          gender: data.user.gender,
+          name: data.user.name,
+        });
         router.push("/dashboard");
         router.refresh();
       }
@@ -101,6 +110,29 @@ export default function RegisterPage() {
               minLength={6}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
+          </div>
+          <div>
+            <label
+              htmlFor="gender"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Gender
+            </label>
+            <select
+              id="gender"
+              value={formData.gender}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  gender: e.target.value as "M" | "F",
+                })
+              }
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            >
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+            </select>
           </div>
           {error && (
             <div className="text-red-600 text-sm text-center">{error}</div>

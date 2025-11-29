@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { saveAuthContext } from "@/lib/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,6 +31,16 @@ export default function LoginPage() {
         setError(data.error || "Login failed");
         return;
       }
+
+      const data = await response.json();
+
+      // Save auth context to localStorage
+      saveAuthContext({
+        userId: data.user.id,
+        email: data.user.email,
+        gender: data.user.gender,
+        name: data.user.name,
+      });
 
       router.push("/dashboard");
       router.refresh();

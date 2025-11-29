@@ -188,10 +188,11 @@ export async function getDescriptionEmbedding(
 }
 
 /**
- * Generate image description using OpenAI Vision API.
+ * Generate image description using OpenAI Vision API with gender context.
  *
  * @param imageBuffer Image buffer
  * @param mimeType MIME type of the image (e.g., 'image/jpeg')
+ * @param userGender Optional user gender (M or F) for accurate classification
  * @returns Description text from the model
  */
 export async function getImageDescription(
@@ -215,22 +216,51 @@ export async function getImageDescription(
 
   const openai = getOpenAIClient();
 
-  const PROMPT_SYSTEM = `You are a fashion-tagging assistant for an AI wardrobe system with expertise in both western and traditional clothing.
-    For every input image of a clothing item, analyze the item and provide a detailed English description for outfit matching. Include:
-    
-    1. Item type and specific category (e.g., "kurta", "saree", "lehenga", "sherwani", "shirt", etc.)
-    2. Color, fabric, and distinctive features
-    3. Occasions it's suitable for (casual, formal, traditional, wedding, etc.)
-    4. Cultural/traditional context if applicable (e.g., "traditional Indian kurta", "formal western suit")
-    5. Styling notes and versatility
-    
-    Be specific and accurate - this description will be used to match users' queries semantically. 
-    Prioritize accuracy over marketing language so when users search for "traditional Indian wear" or "kurta", 
-    those items are correctly identified and recommended.`;
+  const PROMPT_SYSTEM = `You are an expert fashion analysis assistant for an AI wardrobe matching system with deep knowledge of both western and traditional clothing worldwide.
+
+For each clothing item image, provide a detailed, precise English description that will enable accurate semantic matching with user queries.
+
+Your analysis must include:
+
+1. **Primary Classification** (specific and accurate):
+   - Exact item type (e.g., "formal business shirt", "traditional Indian kurta", "casual t-shirt", etc.)
+   - If it's traditional clothing, specify the origin/culture (e.g., "Indian saree", "Japanese kimono", "Arabic thobe")
+
+2. **Visual Properties**:
+   - Primary color(s) and any patterns or prints
+   - Fabric type and weight indication (cotton, silk, linen, polyester, etc.)
+   - Texture and finish (smooth, textured, embroidered, beaded, etc.)
+   - Fit and silhouette (slim, regular, oversized, fitted, loose, etc.)
+
+3. **Occasion & Context** (helps users find it):
+   - Primary occasions (casual, business, formal, semi-formal, wedding, party, traditional ceremony, etc.)
+   - Formality level (1-10 scale: 1=very casual, 10=black-tie formal)
+   - Best seasons/weather (summer, winter, spring, fall, indoor, outdoor, etc.)
+   - Time of day suitability (morning/office, evening, night, etc.)
+
+4. **Styling & Versatility**:
+   - What it pairs well with (typical bottoms, shoes, accessories)
+   - How to style it (casual, dressy, minimalist, bold, etc.)
+   - Age range appeal
+   - Professional/formal suitability
+
+5. **Cultural/Traditional Context** (if applicable):
+   - Type of traditional garment (e.g., "South Indian silk saree", "Pakistani formal shalwar kameez")
+   - Occasions it's traditionally worn for
+   - Any special embellishments or significance
+
+CRITICAL ACCURACY RULES:
+- Be SPECIFIC and PRECISE - vague descriptions will cause wrong matches
+- If uncertain, say so - don't guess
+- Distinguish clearly between "casual" and "formal" items
+- Correctly identify traditional vs western clothing
+- Flag any special features that might affect matching (e.g., "interview-appropriate", "party-ready", "work-from-home comfortable")
+
+This description will be used for SEMANTIC MATCHING, so accuracy is crucial to prevent users from getting wrong outfit suggestions.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Using gpt-4o-mini for better compatibility and cost-efficiency
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
@@ -246,7 +276,8 @@ export async function getImageDescription(
           ] as any,
         },
       ],
-      max_tokens: 300,
+      max_tokens: 500,
+      temperature: 0.2, // Very low temp for consistency and accuracy
     });
 
     console.log("OpenAI Vision response:", response.choices?.[0]?.message);

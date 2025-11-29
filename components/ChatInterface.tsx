@@ -124,7 +124,9 @@ export function ChatInterface() {
                 {message.outfit && message.outfit.items.length > 0 && (
                   <div className="mt-4 space-y-3">
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
-                      <span>⭐ Match Score: {message.outfit.averageScore}%</span>
+                      <span>
+                        ⭐ Match Score: {message.outfit.averageScore}%
+                      </span>
                       {message.outfit.isComplete && (
                         <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
                           Complete Outfit
@@ -191,14 +193,16 @@ export function ChatInterface() {
                                 )}
                                 {item.tags.length > 0 && (
                                   <div className="flex gap-1">
-                                    {item.tags.slice(0, 2).map((tag, tagIdx) => (
-                                      <span
-                                        key={tagIdx}
-                                        className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded"
-                                      >
-                                        #{tag}
-                                      </span>
-                                    ))}
+                                    {item.tags
+                                      .slice(0, 2)
+                                      .map((tag, tagIdx) => (
+                                        <span
+                                          key={tagIdx}
+                                          className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded"
+                                        >
+                                          #{tag}
+                                        </span>
+                                      ))}
                                   </div>
                                 )}
                               </div>
@@ -242,7 +246,10 @@ export function ChatInterface() {
         </div>
 
         {/* Input Form */}
-        <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4 bg-gray-50 rounded-b-lg">
+        <form
+          onSubmit={handleSubmit}
+          className="border-t border-gray-200 p-4 bg-gray-50 rounded-b-lg"
+        >
           <div className="flex gap-2">
             <input
               type="text"

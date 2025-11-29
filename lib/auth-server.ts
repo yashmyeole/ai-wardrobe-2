@@ -1,11 +1,17 @@
 // lib/auth-server.ts
 import { cookies } from "next/headers";
-import { verifyToken, getUserById, verifySession, hashToken } from "./auth-utils";
+import {
+  verifyToken,
+  getUserById,
+  verifySession,
+  hashToken,
+} from "./auth-utils";
 
 export interface AuthUser {
   id: number;
   email: string;
   name: string | null;
+  gender: "M" | "F";
 }
 
 export async function getAuthUser(): Promise<AuthUser | null> {

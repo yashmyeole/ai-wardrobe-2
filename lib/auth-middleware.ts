@@ -1,6 +1,11 @@
 // lib/auth-middleware.ts
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken, getUserById, verifySession, hashToken } from "./auth-utils";
+import {
+  verifyToken,
+  getUserById,
+  verifySession,
+  hashToken,
+} from "./auth-utils";
 
 export interface AuthContext {
   userId: number;
@@ -62,10 +67,7 @@ export function requireAuth(fn: Function) {
   return async (req: NextRequest) => {
     const auth = await getAuthContext(req);
     if (!auth) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     return fn(req, auth);
   };

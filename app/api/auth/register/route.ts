@@ -13,12 +13,13 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   name: z.string().optional(),
+  gender: z.enum(["M", "F"]),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, name } = registerSchema.parse(body);
+    const { email, password, name, gender } = registerSchema.parse(body);
 
     // Check if user already exists
     const existingUser = await getUserByEmail(email);
@@ -32,8 +33,8 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = await hashPassword(password);
 
-    // Create user
-    const user = await createUser(email, passwordHash, name);
+    // Create user with gender
+    const user = await createUser(email, passwordHash, name, gender);
 
     // Create token
     const token = createToken({
@@ -58,13 +59,16 @@ export async function POST(request: NextRequest) {
           id: user.id,
           email: user.email,
           name: user.name,
+          gender: user.gender,
         },
         token,
       },
       {
         status: 201,
         headers: {
-          "Set-Cookie": `auth_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60}`,
+          "Set-Cookie": `auth_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${
+            7 * 24 * 60 * 60
+          }`,
         },
       }
     );

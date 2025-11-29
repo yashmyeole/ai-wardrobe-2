@@ -56,7 +56,9 @@ export async function POST(request: NextRequest) {
       {
         status: 200,
         headers: {
-          "Set-Cookie": `auth_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60}`,
+          "Set-Cookie": `auth_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${
+            7 * 24 * 60 * 60
+          }`,
         },
       }
     );

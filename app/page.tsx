@@ -1,14 +1,13 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-// import { authOptions } from '@/lib/auth'
+import { getAuthUser } from "@/lib/auth-server";
 import Link from "next/link";
 
 export default async function Home() {
-  // const session = await getServerSession(authOptions)
+  const user = await getAuthUser();
 
-  // if (session) {
-  //   redirect('/dashboard')
-  // }
+  if (user) {
+    redirect("/dashboard");
+  }
 
   return (
     <div className="min-h-screen bg-linear-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4">

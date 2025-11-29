@@ -7,6 +7,14 @@ import { query } from "@/lib/db";
 import { getTextEmbedding } from "@/lib/embeddings";
 import { getAuthContext } from "@/lib/auth-middleware";
 
+// OpenAI client for validation
+function getOpenAIClient() {
+  const { OpenAI } = require("openai");
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
+
 const bodySchema = z.object({
   query: z.string().min(1),
   limit: z.number().int().min(1).max(50).optional().default(10),
@@ -57,6 +65,87 @@ interface CuratedOutfit {
   message: string;
   isComplete: boolean;
   totalScore: number;
+}
+
+/**
+ * Use AI to validate and score outfit matches against user's intent
+ * This ensures the recommendations are truly aligned with what the user wants
+ */
+async function validateOutfitMatches(
+  userQuery: string,
+  items: OutfitItem[]
+): Promise<OutfitItem[]> {
+  if (items.length === 0) return items;
+
+  try {
+    const openai = getOpenAIClient();
+
+    // Build item descriptions for validation
+    const itemsList = items
+      .map(
+        (item, idx) =>
+          `${idx + 1}. ${item.category.toUpperCase()}: ${item.description}`
+      )
+      .join("\n");
+
+    const validationPrompt = `You are an expert fashion stylist validating outfit recommendations.
+
+User's request: "${userQuery}"
+
+Available clothing items:
+${itemsList}
+
+Analyze each item and provide a confidence score (0-100) indicating how well it matches the user's request.
+Consider:
+1. Occasion appropriateness (formal, casual, traditional, etc.)
+2. Season/weather suitability
+3. Style compatibility
+4. Color and fabric appropriateness
+5. Cultural context (traditional vs western wear)
+
+CRITICAL: Be strict - only high confidence (70+) for true matches. Reject items that don't fit the user's intent.
+
+Format your response as ONLY a JSON array with no markdown or extra text:
+[
+  {"index": 1, "confidence": 85, "reason": "Perfect formal blue shirt for office meetings"},
+  {"index": 2, "confidence": 42, "reason": "Wrong occasion - too casual for formal event"},
+  ...
+]`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: validationPrompt,
+        },
+      ],
+      max_tokens: 1000,
+      temperature: 0.3, // Lower temp for consistency
+    });
+
+    const responseText = response.choices?.[0]?.message?.content || "[]";
+    const scores = JSON.parse(responseText);
+
+    // Apply confidence scores and filter low-confidence matches
+    const validatedItems = items
+      .map((item, idx) => {
+        const scoreData = scores.find((s: any) => s.index === idx + 1);
+        const confidence = scoreData?.confidence || 0;
+        return {
+          ...item,
+          confidence,
+          validationReason: scoreData?.reason || "",
+        };
+      })
+      .filter((item: any) => item.confidence >= 65) // Only keep 65+ confidence
+      .sort((a: any, b: any) => b.confidence - a.confidence); // Sort by confidence desc
+
+    return validatedItems;
+  } catch (error) {
+    console.warn("AI validation failed, using all items:", error);
+    return items; // Fall back to unvalidated items
+  }
 }
 
 /**
@@ -309,8 +398,27 @@ export async function POST(req: NextRequest) {
       }));
     }
 
-    // Curate the outfit intelligently
-    const outfit = curateOutfit(allItems, userQuery);
+    // Step 1: Use AI to validate items match the user's intent
+    // This filters out items that don't truly fit what the user is looking for
+    const validatedItems = await validateOutfitMatches(userQuery, allItems);
+
+    if (validatedItems.length === 0) {
+      // If validation filtered out everything, provide helpful feedback
+      return NextResponse.json(
+        {
+          outfit: {
+            message: `I couldn't find items in your wardrobe that confidently match "${userQuery}". Try being more specific about the occasion, style, or occasion (e.g., "formal blue shirt for a wedding" or "casual summer dress").`,
+            isComplete: false,
+            items: [],
+            averageScore: "0",
+          },
+        },
+        { status: 200 }
+      );
+    }
+
+    // Step 2: Curate the outfit intelligently using validated items
+    const outfit = curateOutfit(validatedItems, userQuery);
 
     // Format response
     const recommendation = {

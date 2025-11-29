@@ -10,6 +10,7 @@ export interface User {
   id: number;
   email: string;
   name: string | null;
+  gender: "M" | "F";
 }
 
 export interface AuthPayload {
@@ -77,9 +78,7 @@ export function verifyToken(token: string): AuthPayload | null {
     }
 
     // Decode and verify payload
-    const payload = JSON.parse(
-      Buffer.from(payloadB64, "base64url").toString()
-    );
+    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
 
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp < now) {
@@ -97,15 +96,19 @@ export function verifyToken(token: string): AuthPayload | null {
 
 // Get user by email
 export async function getUserByEmail(email: string): Promise<User | null> {
-  const result = await query("SELECT id, email, name FROM public.users WHERE email = $1", [
-    email,
-  ]);
+  const result = await query(
+    "SELECT id, email, name, gender FROM public.users WHERE email = $1",
+    [email]
+  );
   return result.rows[0] || null;
 }
 
 // Get user by ID
 export async function getUserById(id: number): Promise<User | null> {
-  const result = await query("SELECT id, email, name FROM public.users WHERE id = $1", [id]);
+  const result = await query(
+    "SELECT id, email, name, gender FROM public.users WHERE id = $1",
+    [id]
+  );
   return result.rows[0] || null;
 }
 
@@ -113,11 +116,12 @@ export async function getUserById(id: number): Promise<User | null> {
 export async function createUser(
   email: string,
   passwordHash: string,
-  name?: string
+  name?: string,
+  gender?: "M" | "F"
 ): Promise<User> {
   const result = await query(
-    "INSERT INTO public.users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name",
-    [email, passwordHash, name || null]
+    "INSERT INTO public.users (email, password_hash, name, gender) VALUES ($1, $2, $3, $4) RETURNING id, email, name, gender",
+    [email, passwordHash, name || null, gender || "M"]
   );
   return result.rows[0];
 }
@@ -160,7 +164,7 @@ export async function verifyCredentials(
 ): Promise<User | null> {
   try {
     const result = await query(
-      "SELECT id, email, name, password_hash FROM public.users WHERE email = $1",
+      "SELECT id, email, name, gender, password_hash FROM public.users WHERE email = $1",
       [email]
     );
 
@@ -179,6 +183,7 @@ export async function verifyCredentials(
       id: user.id,
       email: user.email,
       name: user.name,
+      gender: user.gender,
     };
   } catch {
     return null;
