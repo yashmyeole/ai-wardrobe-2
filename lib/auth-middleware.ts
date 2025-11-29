@@ -12,12 +12,23 @@ export async function getAuthContext(
   req: NextRequest
 ): Promise<AuthContext | null> {
   try {
+    let token: string | null = null;
+
+    // Try Authorization header first
     const authHeader = req.headers.get("authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    }
+
+    // Fall back to cookie if no Authorization header
+    if (!token) {
+      token = req.cookies.get("auth_token")?.value || null;
+    }
+
+    if (!token) {
       return null;
     }
 
-    const token = authHeader.substring(7);
     const payload = verifyToken(token);
 
     if (!payload) {

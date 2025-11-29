@@ -5,7 +5,7 @@ import { getAuthContext } from "@/lib/auth-middleware";
 export async function POST(request: NextRequest) {
   try {
     const auth = await getAuthContext(request);
-    
+
     // Even if not authenticated, clear the cookie
     const response = NextResponse.json(
       { message: "Logged out successfully" },
