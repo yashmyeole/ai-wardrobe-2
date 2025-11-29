@@ -1,9 +1,16 @@
 // app/api/wardrobe/items/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { getAuthContext } from "@/lib/auth-middleware";
 
 export async function GET(req: NextRequest) {
   try {
+    // Check authentication
+    const auth = await getAuthContext(req);
+    if (!auth) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const url = new URL(req.url);
     // Basic pagination / sorting
     const limit = Math.min(
@@ -23,7 +30,6 @@ export async function GET(req: NextRequest) {
     const style = url.searchParams.get("style");
     const season = url.searchParams.get("season");
     const status = url.searchParams.get("status");
-    const userId = url.searchParams.get("userId");
     const colorsParam = url.searchParams.get("colors"); // CSV e.g. red,blue
     const tagsParam = url.searchParams.get("tags"); // CSV e.g. favorite,wedding
     const q = url.searchParams.get("q"); // free-text search
@@ -32,6 +38,10 @@ export async function GET(req: NextRequest) {
     const where: string[] = [];
     const params: any[] = [];
     let idx = 1;
+
+    // Always filter by authenticated user's ID
+    where.push(`user_id = $${idx++}`);
+    params.push(auth.userId);
 
     if (category) {
       where.push(`category = $${idx++}`);
@@ -51,11 +61,6 @@ export async function GET(req: NextRequest) {
     if (status) {
       where.push(`status = $${idx++}`);
       params.push(status);
-    }
-
-    if (userId) {
-      where.push(`user_id = $${idx++}`);
-      params.push(userId);
     }
 
     // colors and tags are stored as jsonb arrays (e.g. '["red","blue"]')

@@ -5,10 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseAdmin } from "@/lib/firebaseAdmin";
 import { getImageDescription, getDescriptionEmbedding } from "@/lib/embeddings";
 import { query } from "@/lib/db";
+import { getAuthContext } from "@/lib/auth-middleware";
 import { z } from "zod";
 
 const uploadSchema = z.object({
-  userId: z.string().optional(),
   category: z.enum([
     "shirt",
     "pants",
@@ -32,6 +32,12 @@ const MAX_BYTES = parseInt(process.env.MAX_UPLOAD_BYTES || "5242880", 10); // 5M
 
 export async function POST(req: NextRequest) {
   try {
+    // Check authentication
+    const auth = await getAuthContext(req);
+    if (!auth) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const form = await req.formData();
     const file = form.get("file") as File | null;
     const metadataRaw = form.get("metadata") as string | null;
@@ -116,45 +122,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Insert row into database with description and its embedding
-    let insertSql: string;
-    let insertParams: any[];
-
-    if (validated.userId) {
-      insertSql = `
-        INSERT INTO public.wardrobe_items
-          (user_id, image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at)
-        VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8::jsonb, $9::jsonb, 'ready', now(), now())
-        RETURNING id, user_id, image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at;
-      `;
-      insertParams = [
-        validated.userId,
-        imageUrl,
-        description,
-        `[${descriptionEmbedding.join(",")}]`,
-        validated.category,
-        validated.style,
-        validated.season,
-        JSON.stringify(validated.colors),
-        JSON.stringify(validated.tags),
-      ];
-    } else {
-      insertSql = `
-        INSERT INTO public.wardrobe_items
-          (image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at)
-        VALUES ($1, $2, $3::vector, $4, $5, $6, $7::jsonb, $8::jsonb, 'ready', now(), now())
-        RETURNING id, image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at;
-      `;
-      insertParams = [
-        imageUrl,
-        description,
-        `[${descriptionEmbedding.join(",")}]`,
-        validated.category,
-        validated.style,
-        validated.season,
-        JSON.stringify(validated.colors),
-        JSON.stringify(validated.tags),
-      ];
-    }
+    const insertSql = `
+      INSERT INTO public.wardrobe_items
+        (user_id, image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at)
+      VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8::jsonb, $9::jsonb, 'ready', now(), now())
+      RETURNING id, user_id, image_url, description, embedding, category, style, season, colors, tags, status, created_at, updated_at;
+    `;
+    const insertParams = [
+      auth.userId,
+      imageUrl,
+      description,
+      `[${descriptionEmbedding.join(",")}]`,
+      validated.category,
+      validated.style,
+      validated.season,
+      JSON.stringify(validated.colors),
+      JSON.stringify(validated.tags),
+    ];
 
     // Sanity check placeholder counts
     const placeholders = (insertSql.match(/\$\d+/g) || []).map((s) =>

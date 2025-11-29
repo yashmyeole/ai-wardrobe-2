@@ -1,39 +1,31 @@
+// app/api/auth/login/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  hashPassword,
-  createUser,
-  getUserByEmail,
+  verifyCredentials,
   createToken,
   hashToken,
   storeSession,
 } from "@/lib/auth-utils";
 
-const registerSchema = z.object({
+const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
-  name: z.string().optional(),
+  password: z.string().min(1),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, name } = registerSchema.parse(body);
+    const { email, password } = loginSchema.parse(body);
 
-    // Check if user already exists
-    const existingUser = await getUserByEmail(email);
-    if (existingUser) {
+    // Verify credentials
+    const user = await verifyCredentials(email, password);
+    if (!user) {
       return NextResponse.json(
-        { error: "User already exists" },
-        { status: 409 }
+        { error: "Invalid credentials" },
+        { status: 401 }
       );
     }
-
-    // Hash password
-    const passwordHash = await hashPassword(password);
-
-    // Create user
-    const user = await createUser(email, passwordHash, name);
 
     // Create token
     const token = createToken({
@@ -62,7 +54,7 @@ export async function POST(request: NextRequest) {
         token,
       },
       {
-        status: 201,
+        status: 200,
         headers: {
           "Set-Cookie": `auth_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${7 * 24 * 60 * 60}`,
         },
@@ -76,7 +68,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.error("Register error:", error);
+    console.error("Login error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

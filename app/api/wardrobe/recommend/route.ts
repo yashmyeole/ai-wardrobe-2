@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { query } from "@/lib/db";
 import { getTextEmbedding } from "@/lib/embeddings";
+import { getAuthContext } from "@/lib/auth-middleware";
 
 const bodySchema = z.object({
   query: z.string().min(1),
@@ -62,10 +63,7 @@ interface CuratedOutfit {
  * Curate an outfit by selecting the best items from search results
  * Returns only what's needed for the occasion
  */
-function curateOutfit(
-  items: OutfitItem[],
-  userQuery: string
-): CuratedOutfit {
+function curateOutfit(items: OutfitItem[], userQuery: string): CuratedOutfit {
   if (items.length === 0) {
     return {
       items: [],
@@ -76,7 +74,8 @@ function curateOutfit(
   }
 
   // Check if user is asking for traditional/ethnic wear
-  const isTraditionalQuery = /traditional|indian|ethnic|kurta|saree|lehenga|sherwani/i.test(userQuery);
+  const isTraditionalQuery =
+    /traditional|indian|ethnic|kurta|saree|lehenga|sherwani/i.test(userQuery);
 
   // First: Look for complete outfit items (prioritize if query mentions them)
   const completeOutfitItems = items.filter((item) =>
@@ -85,7 +84,12 @@ function curateOutfit(
 
   // If traditional wear is requested, prioritize those items
   if (isTraditionalQuery) {
-    const traditionalCategories = new Set(["kurta", "saree", "lehenga", "sherwani"]);
+    const traditionalCategories = new Set([
+      "kurta",
+      "saree",
+      "lehenga",
+      "sherwani",
+    ]);
     const traditionalItems = completeOutfitItems.filter((item) =>
       traditionalCategories.has(item.category.toLowerCase())
     );
@@ -104,7 +108,9 @@ function curateOutfit(
   }
 
   // Otherwise, look for any complete outfit with high confidence
-  const completeOutfitItem = completeOutfitItems.find((item) => item.score >= 0.6);
+  const completeOutfitItem = completeOutfitItems.find(
+    (item) => item.score >= 0.6
+  );
 
   if (completeOutfitItem) {
     return {
@@ -153,14 +159,19 @@ function curateOutfit(
 
   // If we couldn't find a complete outfit, return what we found
   if (outfit.length > 0) {
-    const totalScore = outfit.reduce((sum, item) => sum + item.score, 0) / outfit.length;
+    const totalScore =
+      outfit.reduce((sum, item) => sum + item.score, 0) / outfit.length;
     const missingItems = requiredCategories.filter(
       (cat) => !outfit.some((item) => item.category.toLowerCase().includes(cat))
     );
 
     return {
       items: outfit,
-      message: `I found ${outfit.length} items that match "${userQuery}", but I'm missing ${missingItems.join(", ")}. Here's what I have:`,
+      message: `I found ${
+        outfit.length
+      } items that match "${userQuery}", but I'm missing ${missingItems.join(
+        ", "
+      )}. Here's what I have:`,
       isComplete: false,
       totalScore,
     };
@@ -177,6 +188,12 @@ function curateOutfit(
 
 export async function POST(req: NextRequest) {
   try {
+    // Check authentication
+    const auth = await getAuthContext(req);
+    if (!auth) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const raw = await req.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {
@@ -221,11 +238,11 @@ export async function POST(req: NextRequest) {
           tags,
           (embedding <-> $1::vector) AS distance
         FROM public.wardrobe_items
-        WHERE embedding IS NOT NULL AND status = 'ready'
+        WHERE embedding IS NOT NULL AND status = 'ready' AND user_id = $2
         ORDER BY distance ASC
-        LIMIT $2;
+        LIMIT $3;
       `;
-      const params = [embLiteral, limit];
+      const params = [embLiteral, auth.userId, limit];
       const res = await query(sql, params);
       const rows = res && res.rows ? res.rows : [];
 
@@ -260,17 +277,17 @@ export async function POST(req: NextRequest) {
       const fallbackSql = `
         SELECT id, image_url, description, category, style, season, colors, tags
         FROM public.wardrobe_items
-        WHERE status = 'ready' AND (
-          description ILIKE $1 
-          OR category ILIKE $1 
-          OR style ILIKE $1 
-          OR tags::text ILIKE $1 
-          OR colors::text ILIKE $1
+        WHERE status = 'ready' AND user_id = $1 AND (
+          description ILIKE $2 
+          OR category ILIKE $2 
+          OR style ILIKE $2 
+          OR tags::text ILIKE $2 
+          OR colors::text ILIKE $2
         )
         ORDER BY created_at DESC
-        LIMIT $2;
+        LIMIT $3;
       `;
-      const fallbackRes = await query(fallbackSql, [kw, limit]);
+      const fallbackRes = await query(fallbackSql, [auth.userId, kw, limit]);
       const fallbackRows =
         fallbackRes && fallbackRes.rows ? fallbackRes.rows : [];
 
@@ -286,11 +303,7 @@ export async function POST(req: NextRequest) {
           : r.colors
           ? JSON.parse(r.colors)
           : [],
-        tags: Array.isArray(r.tags)
-          ? r.tags
-          : r.tags
-          ? JSON.parse(r.tags)
-          : [],
+        tags: Array.isArray(r.tags) ? r.tags : r.tags ? JSON.parse(r.tags) : [],
         score: 0.5 - i * 0.05,
         distance: 999,
       }));
