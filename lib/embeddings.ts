@@ -215,9 +215,18 @@ export async function getImageDescription(
 
   const openai = getOpenAIClient();
 
-  const PROMPT_SYSTEM = `You are a fashion-tagging assistant for an AI wardrobe system.
-    For every input image of a clothing item, analyze the item and output english sentences describing the item in detail for outfit matching along with the occasions it is wear by many people and can be worn by the person. Make sure you tell this in detail. When a user asks for this speific outfit the decscription should be able to give the accurate product to wear (not marketing language) 
-    `;
+  const PROMPT_SYSTEM = `You are a fashion-tagging assistant for an AI wardrobe system with expertise in both western and traditional clothing.
+    For every input image of a clothing item, analyze the item and provide a detailed English description for outfit matching. Include:
+    
+    1. Item type and specific category (e.g., "kurta", "saree", "lehenga", "sherwani", "shirt", etc.)
+    2. Color, fabric, and distinctive features
+    3. Occasions it's suitable for (casual, formal, traditional, wedding, etc.)
+    4. Cultural/traditional context if applicable (e.g., "traditional Indian kurta", "formal western suit")
+    5. Styling notes and versatility
+    
+    Be specific and accurate - this description will be used to match users' queries semantically. 
+    Prioritize accuracy over marketing language so when users search for "traditional Indian wear" or "kurta", 
+    those items are correctly identified and recommended.`;
 
   try {
     const response = await openai.chat.completions.create({

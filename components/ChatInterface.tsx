@@ -2,24 +2,29 @@
 
 import { useState, useRef, useEffect } from "react";
 
+interface OutfitItem {
+  id: string;
+  imageUrl: string;
+  description: string;
+  category: string;
+  style: string;
+  season: string;
+  colors: string[];
+  tags: string[];
+  matchScore: string;
+}
+
+interface Outfit {
+  message: string;
+  isComplete: boolean;
+  items: OutfitItem[];
+  averageScore: string;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
-  recommendations?: Recommendation[];
-}
-
-interface Recommendation {
-  item: {
-    id: string;
-    imageUrl: string;
-    category: string;
-    style: string;
-    season: string;
-    colors: string[];
-    tags: string[];
-  };
-  explanation: string;
-  score: number;
+  outfit?: Outfit;
 }
 
 export function ChatInterface() {
@@ -27,7 +32,7 @@ export function ChatInterface() {
     {
       role: "assistant",
       content:
-        "Hi! I'm your AI wardrobe assistant. Tell me about an upcoming event and I'll recommend outfits from your wardrobe!",
+        "👋 Hi! I'm your AI wardrobe stylist. Tell me about your upcoming event or occasion, and I'll curate the perfect outfit from your wardrobe!",
     },
   ]);
   const [input, setInput] = useState("");
@@ -59,7 +64,7 @@ export function ChatInterface() {
       const response = await fetch("/api/wardrobe/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: input, limit: 3 }),
+        body: JSON.stringify({ query: input, limit: 10 }),
       });
 
       const data = await response.json();
@@ -70,18 +75,15 @@ export function ChatInterface() {
 
       const assistantMessage: Message = {
         role: "assistant",
-        content:
-          data.recommendations?.length > 0
-            ? `I found ${data.recommendations.length} recommendations for you!`
-            : "I couldn't find any matching items in your wardrobe. Try uploading more items or adjusting your query.",
-        recommendations: data.recommendations || [],
+        content: data.outfit.message,
+        outfit: data.outfit,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error: any) {
       const errorMessage: Message = {
         role: "assistant",
-        content: `Sorry, I encountered an error: ${error.message}. Please try again.`,
+        content: `❌ Sorry, I encountered an error: ${error.message}. Please try again.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -91,13 +93,16 @@ export function ChatInterface() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">
-        Get Outfit Recommendations
+      <h2 className="text-2xl font-bold text-gray-900 mb-2">
+        ✨ AI Outfit Stylist
       </h2>
+      <p className="text-gray-600 mb-6">
+        Describe your occasion and I'll curate the perfect outfit for you
+      </p>
 
       <div
-        className="bg-white rounded-lg shadow-lg flex flex-col"
-        style={{ height: "600px" }}
+        className="bg-white rounded-lg shadow-lg flex flex-col border border-gray-200"
+        style={{ height: "700px" }}
       >
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.map((message, idx) => (
@@ -108,71 +113,114 @@ export function ChatInterface() {
               }`}
             >
               <div
-                className={`max-w-[80%] rounded-lg p-4 ${
+                className={`max-w-2xl rounded-lg p-4 ${
                   message.role === "user"
                     ? "bg-purple-600 text-white"
-                    : "bg-gray-100 text-gray-900"
+                    : "bg-gray-50 text-gray-900 border border-gray-200"
                 }`}
               >
-                <p className="whitespace-pre-wrap">{message.content}</p>
-                {message.recommendations &&
-                  message.recommendations.length > 0 && (
-                    <div className="mt-4 space-y-4">
-                      {message.recommendations.map((rec, recIdx) => (
+                <p className="whitespace-pre-wrap mb-4">{message.content}</p>
+
+                {message.outfit && message.outfit.items.length > 0 && (
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
+                      <span>⭐ Match Score: {message.outfit.averageScore}%</span>
+                      {message.outfit.isComplete && (
+                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
+                          Complete Outfit
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                      {message.outfit.items.map((item, itemIdx) => (
                         <div
-                          key={recIdx}
-                          className="bg-white rounded-lg p-4 border border-gray-200"
+                          key={itemIdx}
+                          className="bg-white rounded-lg p-4 border border-gray-200 hover:border-purple-300 transition-colors"
                         >
                           <div className="flex gap-4">
-                            <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                            {/* Image */}
+                            <div className="w-28 h-28 bg-gray-100 rounded-lg overflow-hidden shrink-0 shadow-sm">
                               <img
-                                src={rec.item.imageUrl}
-                                alt={rec.item.category}
+                                src={item.imageUrl}
+                                alt={item.category}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src =
-                                    "/placeholder-image.png";
+                                    "https://via.placeholder.com/112x112?text=No+Image";
                                 }}
                               />
                             </div>
+
+                            {/* Details */}
                             <div className="flex-1">
                               <div className="flex items-start justify-between mb-2">
                                 <div>
-                                  <h4 className="font-semibold text-gray-900 capitalize">
-                                    {rec.item.category}
+                                  <h4 className="font-bold text-gray-900 capitalize text-lg">
+                                    {item.category}
                                   </h4>
                                   <p className="text-sm text-gray-600 capitalize">
-                                    {rec.item.style} • {rec.item.season}
+                                    {item.style} • {item.season}
                                   </p>
                                 </div>
-                                <span className="text-xs text-gray-500">
-                                  {(rec.score * 100).toFixed(0)}% match
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-700 mb-2">
-                                {rec.explanation}
-                              </p>
-                              {rec.item.colors.length > 0 && (
-                                <div className="flex flex-wrap gap-1">
-                                  {rec.item.colors.map((color, colorIdx) => (
-                                    <span
-                                      key={colorIdx}
-                                      className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded"
-                                    >
-                                      {color}
-                                    </span>
-                                  ))}
+                                <div className="text-right">
+                                  <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                                    {item.matchScore}% match
+                                  </span>
                                 </div>
-                              )}
+                              </div>
+
+                              {/* Description */}
+                              <p className="text-sm text-gray-700 mb-3 line-clamp-2">
+                                {item.description}
+                              </p>
+
+                              {/* Colors and Tags */}
+                              <div className="flex flex-wrap gap-2">
+                                {item.colors.length > 0 && (
+                                  <div className="flex gap-1">
+                                    {item.colors.map((color, colorIdx) => (
+                                      <span
+                                        key={colorIdx}
+                                        className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded capitalize"
+                                      >
+                                        {color}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {item.tags.length > 0 && (
+                                  <div className="flex gap-1">
+                                    {item.tags.slice(0, 2).map((tag, tagIdx) => (
+                                      <span
+                                        key={tagIdx}
+                                        className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded"
+                                      >
+                                        #{tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
-                  )}
+                  </div>
+                )}
+
+                {message.outfit && message.outfit.items.length === 0 && (
+                  <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-800">
+                      💡 {message.content}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           ))}
+
           {loading && (
             <div className="flex justify-start">
               <div className="bg-gray-100 rounded-lg p-4">
@@ -192,24 +240,29 @@ export function ChatInterface() {
           )}
           <div ref={messagesEndRef} />
         </div>
-        <form onSubmit={handleSubmit} className="border-t p-4">
+
+        {/* Input Form */}
+        <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4 bg-gray-50 rounded-b-lg">
           <div className="flex gap-2">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="E.g., I'm going to a summer evening rooftop party..."
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="e.g., I'm going to a summer evening rooftop party..."
+              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder-gray-400"
               disabled={loading}
             />
             <button
               type="submit"
               disabled={!input.trim() || loading}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
-              Send
+              {loading ? "..." : "Send"}
             </button>
           </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Try describing the occasion, time of day, and dress code!
+          </p>
         </form>
       </div>
     </div>

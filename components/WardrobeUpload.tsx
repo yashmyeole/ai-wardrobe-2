@@ -160,13 +160,23 @@ export function WardrobeUpload() {
               }
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
             >
-              <option value="shirt">Shirt</option>
-              <option value="pants">Pants</option>
-              <option value="dress">Dress</option>
-              <option value="shoes">Shoes</option>
-              <option value="jacket">Jacket</option>
-              <option value="accessory">Accessory</option>
-              <option value="other">Other</option>
+              <optgroup label="Western Wear">
+                <option value="shirt">Shirt</option>
+                <option value="pants">Pants</option>
+                <option value="dress">Dress</option>
+                <option value="shoes">Shoes</option>
+                <option value="jacket">Jacket</option>
+              </optgroup>
+              <optgroup label="Traditional Indian Wear">
+                <option value="kurta">Kurta</option>
+                <option value="saree">Saree</option>
+                <option value="lehenga">Lehenga</option>
+                <option value="sherwani">Sherwani</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="accessory">Accessory</option>
+                <option value="other">Other</option>
+              </optgroup>
             </select>
           </div>
 
@@ -185,6 +195,7 @@ export function WardrobeUpload() {
               <option value="semi-formal">Semi-Formal</option>
               <option value="casual">Casual</option>
               <option value="sporty">Sporty</option>
+              <option value="traditional">Traditional</option>
             </select>
           </div>
 
